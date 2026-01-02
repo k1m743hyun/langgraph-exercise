@@ -1,48 +1,24 @@
-from dotenv import load_dotenv
-from langchain.chat_models import ChatOpenAI
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_anthropic import ChatAnthropic
-from langchain.schema import HumanMessage
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict
 
-# .env 파일에서 환경 변수 로드
-load_dotenv()
+# 1. State: 카운터를 저장하는 상자
+class CountState(TypedDict):
+    count: int
 
-# GPT-4.1-mini 설정
-# gpt4_mini = ChatOpenAI(
-#     model_name="gpt-4.1-mini", # GPT-4.1-mini에 해당하는 모델명
-#     temperature=0.7,
-#     max_tokens=150,
-# )
+# 2. Node: 카운터를 증가시키는 함수
+def increment(state):
+    print(f"현재 카운트: {state['count']}")
+    new_count = state['count'] + 1
+    print(f"새로운 카운트: {new_count}")
+    return {"count": new_count}
 
-# GPT-4.1 설정
-# gpt4 = ChatOpenAI(
-#     model_name="gpt-4.1", # GPT-4.1에 해당하는 모델명
-#     temporature=0.7,
-#     max_tokens=300,
-# )
+# 3. Edge: 노드를 연결하는 그래프
+graph = StateGraph(CountState)
+graph.add_node("increment", increment)
+graph.add_edge(START, "increment")
+graph.add_edge("increment", END)
 
-# Google Gemini 설정
-gemini = ChatGoogleGenerativeAI(
-    model="gemini-pro",
-)
-
-# Anthropic Claude 설정
-claude = ChatAnthropic(
-    model="claude-3-opus-20240229",
-)
-
-# GPT-4.1-mini 사용
-# response_mini = gpt4_mini.invoke([HumanMessage(content="Hello, how are you?")])
-# print(response_mini)
-
-# GPT-4.1 사용
-# response_full = gpt4.invoke([HumanMessage(content="Explain the concept of machine learning.")])
-# print(response_full)
-
-# Google Gemini 사용
-gemini_response = gemini.invoke("Explain the components of LangGraph.")
-print("Gemini's response:", gemini_response)
-
-# Anthropic Claude 사용
-claude_response = claude.invoke("Explain the concept of Direct Graph.")
-print("Claude's response:", claude_response)
+# 실행해보기
+app = graph.compile()
+result = app.invoke({"count": 0})
+print(f"최종 결과: {result}")
