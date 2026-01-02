@@ -1,24 +1,30 @@
 from langgraph.graph import StateGraph, START, END
 from typing import TypedDict
 
-# 1. State: 카운터를 저장하는 상자
 class CountState(TypedDict):
     count: int
 
-# 2. Node: 카운터를 증가시키는 함수
-def increment(state):
-    print(f"현재 카운트: {state['count']}")
-    new_count = state['count'] + 1
-    print(f"새로운 카운트: {new_count}")
-    return {"count": new_count}
+# 첫번째 증가 함수
+def first_increment(state):
+    print("첫 번째 증가")
+    return {"count": state["count"] + 1}
 
-# 3. Edge: 노드를 연결하는 그래프
+# 두번째 증가 함수
+def second_increment(state):
+    print("두 번째 증가")
+    return {"count": state["count"] + 10}
+
+# 그래프 구성
 graph = StateGraph(CountState)
-graph.add_node("increment", increment)
-graph.add_edge(START, "increment")
-graph.add_edge("increment", END)
+graph.add_node("first", first_increment)
+graph.add_node("second", second_increment)
 
-# 실행해보기
+# 연결: START -> first -> second -> END
+graph.add_edge(START, "first")
+graph.add_edge("first", "second")
+graph.add_edge("second", END)
+
+# 실행
 app = graph.compile()
 result = app.invoke({"count": 0})
 print(f"최종 결과: {result}")
