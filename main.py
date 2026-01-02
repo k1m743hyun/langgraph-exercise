@@ -1,21 +1,28 @@
-from langgraph.graph import StateGraph, START, END
-from typing import TypedDict
+from dotenv import load_dotenv
+from langchain.chat_models import ChatOpenAI
+from langchain.schema import HumanMessage
 
-# 1단계: 데이터 저장소 만들기 (State)
-class MyState(TypedDict):
-    message: str
+# .env 파일에서 환경 변수 로드
+load_dotenv()
 
-# 2단계: 작업 함수 만들기 (Node)
-def say_hello(state):
-    return {"message": "Hello, LangGraph!"}
+# GPT-4.1-mini 설정
+gpt4_mini = ChatOpenAI(
+    model_name="gpt-4.1-mini", # GPT-4.1-mini에 해당하는 모델명
+    temperature=0.7,
+    max_tokens=150,
+)
 
-# 3단계: 그래프 만들기
-graph = StateGraph(MyState)
-graph.add_node("hello", say_hello)
-graph.add_edge(START, "hello")
-graph.add_edge("hello", END)
+# GPT-4.1 설정
+gpt4 = ChatOpenAI(
+    model_name="gpt-4.1", # GPT-4.1에 해당하는 모델명
+    temporature=0.7,
+    max_tokens=300,
+)
 
-# 4단계: 실행하기
-app = graph.compile()
-result = app.invoke({"message": ""})
-print(result)
+# GPT-4.1-mini 사용
+response_mini = gpt4_mini.invoke([HumanMessage(content="Hello, how are you?")])
+print(response_mini)
+
+# GPT-4.1 사용
+response_full = gpt4.invoke([HumanMessage(content="Explain the concept of machine learning.")])
+print(response_full)
