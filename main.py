@@ -27,9 +27,9 @@ gemini = ChatGoogleGenerativeAI(
 )
 
 # Anthropic Claude 설정
-# claude = ChatAnthropic(
-#     model="claude-3-opus-20240229",
-# )
+claude = ChatAnthropic(
+    model="claude-3-opus-20240229",
+)
 
 # GPT-4.1-mini 사용
 # response_mini = gpt4_mini.invoke([HumanMessage(content="Hello, how are you?")])
@@ -44,5 +44,5 @@ gemini_response = gemini.invoke("Explain the components of LangGraph.")
 print("Gemini's response:", gemini_response)
 
 # Anthropic Claude 사용
-# claude_response = claude.invoke("Explain the concept of Direct Graph.")
-# print("Claude's response:", claude_response)
+claude_response = claude.invoke("Explain the concept of Direct Graph.")
+print("Claude's response:", claude_response)
