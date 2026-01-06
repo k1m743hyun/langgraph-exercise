@@ -3,53 +3,72 @@ from typing_extensions import TypedDict
 from typing import Annotated
 from operator import add
 
-class State(TypedDict):
-    message_count: int                          # 기본 리듀서 (덮어쓰기)
-    conversation: Annotated[list[str], add]     # add 리듀서 (리스트 연결)
+def keep_last_n(existing: list, new: list, n: int = 5) -> list:
+    '''최근 n개 항목만 유지하는 리듀서'''
+    combined = (existing or []) + (new or [])
+    return combined[-n:] # 마지막 n개만 반환
 
-# 노드 1 실행
-def node1(state: State) -> State:
-    '''
-    첫 번째 노드: 대화 시작
-    - message_count를 1로 설정
-    - conversation에 인사말 추가
-    '''
-    print(f"Node 1 - 현재 대화: {state.get('conversation', [])}")
+# 부분 함수로 리듀서 생성
+from functools import partial
+keep_last_5 = partial(keep_last_n, n=5)
+
+class AdvancedState(TypedDict):
+    total_tokens: Annotated[int, add]               # 토큰 수 누적
+    max_score: Annotated[float, max]                # 최고 점수 유지
+    recent_actions: Annotated[list, keep_last_5]    # 최근 5개 액션만 유지
+    current_status: str                             # 현재 상태 (덮어쓰기)
+
+def process_input(state: AdvancedState) -> AdvancedState:
+    '''사용자 입력 처리'''
     return {
-        "message_count": 1,
-        "conversation": ["안녕하세요!"],
+        "total_tokens": 150,    # 150 토큰 추가
+        "max_score": 0.85,      # 점수 0.85
+        "recent_actions": ["input_received"],
+        "current_status": "processing",
     }
 
-# 노드 2 실행
-def node2(state: State) -> State:
-    '''
-    두 번째 노드: 대화 이어가기
-    - message_count는 업데이트 하지 않음 (이전 값 유지)
-    - conversation에 새 메세지 추가 (add 리듀서로 누적)
-    '''
-    print(f"Node 2 - 현재 대화: {state['conversation']}")
+def analyze_content(state: AdvancedState) -> AdvancedState:
+    '''콘텐츠 분석'''
     return {
-        "conversation": ["어떻게 도와드릴까요?"],
+        "total_tokens": 200,    # 200 토큰 추가
+        "max_score": 0.92,      # 더 높은 점수
+        "recent_actions": ["analysis_started", "analysis_completed"],
+        "current_status": "analyzed",
+    }
+
+def generate_response(state: AdvancedState) -> AdvancedState:
+    '''응답 생성'''
+    return {
+        "total_tokens": 300,    # 300 토큰 추가
+        "max_score": 0.88,      # 낮은 점수 (무시됨)
+        "recent_actions": ["response_generated"],
+        "current_status": "completed",
     }
 
 # 그래프 구성
-graph = StateGraph(State)
-graph.add_node("node1", node1)
-graph.add_node("node2", node2)
+graph = StateGraph(AdvancedState)
+graph.add_node("process", process_input)
+graph.add_node("analyze", analyze_content)
+graph.add_node("generate", generate_response)
 
-# 연결: START -> first -> second -> END
-graph.add_edge(START, "node1")
-graph.add_edge("node1", "node2")
-graph.add_edge("node2", END)
+graph.add_edge(START, "process")
+graph.add_edge("process", "analyze")
+graph.add_edge("analyze", "generate")
+graph.add_edge("generate", END)
 
 compiled_graph = graph.compile()
 
 # 실행
-initial_tate = {
-    "message_count": 0,
-    "conversation": [],
+initial_state = {
+        "total_tokens": 0,
+        "max_score": 0.0,
+        "recent_actions": [],
+        "current_status": "idle",
 }
-result = compiled_graph.invoke(initial_tate)
+result = compiled_graph.invoke(initial_state)
+
 print("\n=== 최종 결과 ===")
-print(f"메세지 수: {result['message_count']}")
-print(f"대화 내용: {result['conversation']}")
+print(f"총 토큰 수: {result['total_tokens']}")
+print(f"최고 점수: {result['max_score']}")
+print(f"최근 액션: {result['recent_actions']}")
+print(f"현재 상태: {result['current_status']}")
