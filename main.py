@@ -2,52 +2,60 @@ from langgraph.graph import StateGraph, START, END
 from typing import TypedDict, Dict, Any, Annotated, Optional
 from datetime import datetime
 from operator import add
+from langchain_core.runnables import RunnableConfig
 import asyncio
 
-class ValidationState(TypedDict):
-    input_data: Any
-    validation_errors: list[str]
-    is_valid: bool
+class State(TypedDict):
+    input: str
+    output: str
+    config_used: Dict
 
-def validation_node(state: ValidationState) -> Dict[str, Any]:
+def configurable_node(state: State, config: RunnableConfig) -> Dict[str, Any]:
     '''
-    검증 노드 - 데이터 유효성 검사
+    구성 가능한 노드
+    런타임에 동작을 조정할 수 있음
+
+    Args:
+        state: 현재 상태
+        config: 런타임 구성
     '''
-    input_data = state["input_data"]
-    errors = []
+    # 구성에서 값 가져오기
+    model_name = config.get("configurable", {}).get("model", "default")
+    temperature = config.get("configurable",  {}).get("temperature", 0.7)
+    max_retries = config.get("configurable", {}).get("max_retries", 3)
 
-    # 다양한 검증 수행
-    if not input_data:
-        errors.append("입력 데이터가 비어있습니다.")
+    print(f"Using model: {model_name}, temperature: {temperature}")
 
-    if isinstance(input_data, str):
-        if len(input_data) < 3:
-            errors.append("문자열이 너무 짧습니다. (최소 3자)")
-        if len(input_data) > 1000:
-            errors.append("문자열이 너무 깁니다. (최대 1000자)")
-        if not input_data.isascii():
-            errors.append("ASCII 문자만 허용됩니다.")
-
-    elif isinstance(input_data, (int, float)):
-        if input_data < 0:
-            errors.append("음수는 허용되지 않습니다.")
-        if input_data > 1000000:
-            errors.append("값이 너무 큽니다. (최대 1,000,000)")
+    # 구성에 따른 처리
+    result = None
+    for attempt in range(max_retries):
+        try:
+            result = process_with_model(
+                state["input"],
+                model=model_name,
+                temperature=temperature
+            )
+            break
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed: {e}")
+            if attempt == max_retries - 1:
+                result = "Failed after all retries"
     
-    elif isinstance(input_data, list):
-        if len(input_data) == 0:
-            errors.append("리스트가 비어있습니다.")
-        if len(input_data) > 100:
-            errors.append("리스트 항목이 너무 많습니다. (최대 100개)")
-
-    # 검증 결과 반환
     return {
-        "validation_errors": errors,
-        "is_valid": len(errors) == 0,
+        "output":  result,
+        "config_used": {
+            "model": model_name,
+            "temperature": temperature,
+            "retries": max_retries
+        }
     }
 
-graph = StateGraph(ValidationState)
-graph.add_node("node", validation_node)
+def process_with_model(input_data, model, temperature):
+    '''모델을 사용한 처리 (시뮬레이션)'''
+    return f"Processed with {model} at temperature {temperature}: {input_data}"
+
+graph = StateGraph(State)
+graph.add_node("node", configurable_node)
 
 graph.add_edge(START, "node")
 graph.add_edge("node", END)
@@ -55,10 +63,10 @@ graph.add_edge("node", END)
 compiled_graph = graph.compile()
 
 initial_state = {
-    "input_data": "hello",
+    "input": "hello",
 }
 
 result = compiled_graph.invoke(initial_state)
 print("\n=== 최종 결과 ===")
-print(f"에러: {result["validation_errors"]}")
-print(f"결과: {result["is_valid"]}")
+print(f"결과: {result["output"]}")
+print(f"구성: {result["config_used"]}")
