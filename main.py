@@ -1,31 +1,42 @@
-from langgraph.graph import StateGraph
+from langgraph.graph import StateGraph, START, END
 from typing import TypedDict, Dict, Any, Annotated
 from datetime import datetime
 from operator import add
 
-class UpdateState(TypedDict):
-    counter: int
-    items: Annotated[list, add] # 리듀서 적용
-    flag: dict
+class State(TypedDict):
+    input: str
+    output: str
 
-def update_node(state: UpdateState) -> Dict[str, Any]:
+def sync_node(state: State) -> Dict[str, Any]:
     '''
-    상태 업데이트 노드
-    다양한 업데이트 패턴 시연
+    동기 노드 - 일반적인 노드 타입
+    순차적으로 실행되며 결과를 즉시 반환
     '''
-    # 1. 단순 덮어쓰기
-    new_counter = state["counter"] + 1
-
-    # 2. 리스트에 추가 (리듀서 활용)
-    new_items = ["new_item"]
-
-    # 3. 딕셔너리 부분 업데이트
-    updated_flags = state["flags"].copy()
-    updated_flags["processed"] = True
-    updated_flags["node_name"] = "update_node"
+    # 동기 작업 수행
+    result = perform_sync_operation(state["input"])
 
     return {
-        "counter": new_counter, # 덮어쓰기
-        "items": new_items,     # 리듀서로 추가
-        "flags": updated_flags, # 전체 교체
+        "output": result,
     }
+
+def perform_sync_operation(data):
+    '''동기 작업'''
+    import time
+    time.sleep(0.1) # 시뮬레이션
+    return f"Sync: result: {data}"
+
+graph = StateGraph(State)
+graph.add_node("node", sync_node)
+
+graph.add_edge(START, "node")
+graph.add_edge("node", END)
+
+compiled_graph = graph.compile()
+
+initial_state = {
+        "input": "안녕하세요",
+}
+
+result = compiled_graph.invoke(initial_state)
+print("\n=== 최종 결과 ===")
+print(f"결과: {result['output']}")
