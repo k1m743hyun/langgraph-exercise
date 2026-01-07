@@ -8,72 +8,92 @@ import time
 import asyncio
 
 class State(TypedDict):
-    input: str
-    output: str
-    processor_type: str
-    total_processed: int
-    from_cache: bool
+    text: str
+    uppercase_text: str
+    numbers: list[int]
+    scores: list[int]
+    total_score: int
 
-def timing_decorator(func):
-    '''노드 실행 시간 측정 데코레이터'''
-    @wraps(func)
-    def wrapper(state):
-        start_time = time.time()
-        result = func(state)
-        execution_time = time.time() - start_time
+def create_processing_node(node_type: str, **kwargs):
+    """
+    노드 팩토리 함수
+    다양한 타입의 노드를 동적으로 생성
+    """
 
-        # 실행 시간 추가
-        if isinstance(result, dict):
-            result["execution_time"] = execution_time
+    if node_type == "transformer":
+        def transformer_node(state: State) -> Dict[str, Any]:
+            transform_func = kwargs.get("transform_func", lambda x: x)
+            input_field = kwargs.get("input_field", "input")
+            output_field = kwargs.get("output_field", "output")
 
-        print(f"{func.__name__} executed in {execution_time:.3f} seconds")
-        return result
-    
-    return wrapper
+            transformed = transform_func(state[input_field])
+            return {output_field: transformed}
 
-def error_handling_decorator(func):
-    '''에러 처리 데코레이터'''
-    @wraps(func)
-    def wrapper(state):
-        try:
-            return func(state)
-        except Exception as e:
-            print(f"Error in {func.__name__}: {e}")
-            return {
-                "error": str(e),
-                "error_node": func.__name__,
-                "status": "failed",
-            }
-    
-    return wrapper
+        return transformer_node
 
-@timing_decorator
-@error_handling_decorator
-def decorated_node(state: State) -> Dict[str, Any]:
-    '''
-    데코레이터가 적용된 노드
-    자동으로 시간 측정과 에러 처리가 됨
-    '''
-    # 의도적으로 느린 작업
-    time.sleep(0.1)
+    elif node_type == "filter":
+        def filter_node(state: State) -> Dict[str, Any]:
+            filter_func = kwargs.get("filter_func", lambda x: True)
+            items_field = kwargs.get("items_field", "items")
 
-    # 비즈니스 로직
-    result = state["input"].upper() if isinstance(state["input"], str) else str(state["input"])
+            filtered = [item for item in state[items_field] if filter_func(item)]
+            return {items_field: filtered}
 
-    return {"output":  result}
+        return filter_node
+
+    elif node_type == "aggregator":
+        def aggregator_node(state: State) -> Dict[str, Any]:
+            agg_func = kwargs.get("agg_func", sum)
+            values_field = kwargs.get("values_field", "values")
+            result_field = kwargs.get("result_field", "result")
+
+            aggregated = agg_func(state[values_field])
+            return {result_field: aggregated}
+
+        return aggregator_node
+
+    else:
+        raise ValueError(f"Unknown node type: {node_type}")
+
+# 팩토리로 노드 생성
+uppercase_node = create_processing_node(
+    "transformer",
+    transform_func=lambda x: x.upper(),
+    input_field="text",
+    output_field="uppercase_text"
+)
+
+positive_filter = create_processing_node(
+    "filter",
+    filter_func=lambda x: x > 0,
+    items_field="numbers"
+)
+
+sum_aggregator = create_processing_node(
+    "aggregator",
+    agg_func=sum,
+    values_field="scores",
+    result_field="total_score"
+)
 
 graph = StateGraph(State)
-graph.add_node("node", decorated_node)
+graph.add_node("uppercase", uppercase_node)
+graph.add_node("filter_positive", positive_filter)
+graph.add_node("calculate_sum", sum_aggregator)
 
-graph.add_edge(START, "node")
-graph.add_edge("node", END)
+graph.add_edge(START, "filter_positive")
+graph.add_edge("filter_positive", END)
 
 compiled_graph = graph.compile()
 
 initial_state = {
-    "input": "hello",
+    #"text": "hello",
+    "numbers": [2, -3, 4, 5],
+    #"scores": [1, 2, 3, 4],
 }
 
 result = compiled_graph.invoke(initial_state)
 print("\n=== 최종 결과 ===")
-print(f"결과: {result["output"]}")
+#print(f"결과: {result["uppercase_text"]}")
+print(f"결과: {result["numbers"]}")
+#print(f"결과: {result["total_score"]}")
