@@ -5,49 +5,61 @@ from operator import add
 import asyncio
 
 class State(TypedDict):
+    mode: str
     input: str
-    output: str
-    additional_data: list
+    result: dict
+    execution_time: str
+    mode_used: str
 
-async def async_node(state: State) -> Dict[str, Any]:
+def conditional_node(state: State) -> Dict[str, Any]:
     '''
-    비동기 노드 - I/O 작업에 효율적
-    동시에 여러 작업을 처리할 수 있음
+    조건부 노드 - 상태에 따라 다른 처리 수행
     '''
-    # 비동기 작업 수행
-    result = await perform_async_operation(state["input"])
+    mode = state.get("mode", "default")
 
-    # 여러 비동기 작업 동시 실행
-    results = await asyncio.gather(
-        fetch_data_1(),
-        fetch_data_2(),
-        fetch_data_3(),
-    )
+    if mode == "fast":
+        # 빠른 처리
+        result = quick_process(state)
+        execution_time = "fast"
+    elif mode == "thorough":
+        # 정밀 처리
+        result = thorough_process(state)
+        execution_time = "slow"
+    else:
+        # 기본 처리
+        result = default_process(state)
+        execution_time = "normal"
 
     return {
-        "output": result,
-        "additional_data": results
+        "result": result,
+        "execution_time": execution_time,
+        "mode_used": mode
     }
 
-async def perform_async_operation(data):
-    '''비동기 작업'''
-    await asyncio.sleep(0.1) # 시뮬레이션
-    return f"Async: result: {data}"
+def quick_process(state):
+    return {
+        "status": "quick",
+        "data": state.get("input", "")[:10],
+    }
 
-async def fetch_data_1():
-    await asyncio.sleep(0.05)
-    return "data_1"
+def thorough_process(state):
+    return {
+        "status": "thorough",
+        "data": analyze_deeply(state.get("input", "")),
+    }
 
-async def fetch_data_2():
-    await asyncio.sleep(0.05)
-    return "data_2"
+def default_process(state):
+    return {
+        "status": "default",
+        "data": state.get("input", ""),
+    }
 
-async def fetch_data_3():
-    await asyncio.sleep(0.05)
-    return "data_3"
+def analyze_deeply(data):
+    # 심층 분석 로직
+    return f"Deeply analyzed: {data}"
 
 graph = StateGraph(State)
-graph.add_node("node", async_node)
+graph.add_node("node", conditional_node)
 
 graph.add_edge(START, "node")
 graph.add_edge("node", END)
@@ -55,9 +67,10 @@ graph.add_edge("node", END)
 compiled_graph = graph.compile()
 
 initial_state = {
-        "input": "안녕하세요",
+    "mode": "fast",
+    "input": "안녕하세요",
 }
 
-result = asyncio.run(compiled_graph.ainvoke(initial_state))
+result = compiled_graph.invoke(initial_state)
 print("\n=== 최종 결과 ===")
-print(f"결과: {result['output']}")
+print(f"결과: {result["result"]}")
