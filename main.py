@@ -1,60 +1,38 @@
 from langgraph.graph import StateGraph
 from typing import TypedDict, Dict, Any
+from datetime import datetime
 
-# 상태 정의
-class State(TypedDict):
-    counter: int
-    messages: list
-    status: str
+class DataState(TypedDict):
+    raw_data: str
+    process_data: dict
+    metadata: dict
 
-# 기본 노드 함수
-def increment(state: State) -> Dict[str, Any]:
+def data_processor_node(state: DataState) -> Dict[str, Any]:
     '''
-    가장 간단한 형태의 노드
-
-    Args:
-        state: 현재 그래프 상태
-    
-    Returns:
-        업데이트할 상태 딕셔너리
+    상태 처리 노드
+    원시 데이터를 받아 구조화된 데이터로 변환
     '''
-    # 현재 카운터 값 가져오기
-    current_counter = state["counter"]
+    raw_data = state["raw_data"]
 
-    # 비즈니스 로직 수행
-    new_counter = current_counter + 1
+    # 데이터 파싱
+    lines = raw_data.strip().split('\n')
 
-    # 상태 업데이트 반환
-    return {
-        "counter": new_counter,
-        "messages": [f"카운터가 {new_counter}로 증가했습니다."],
-        "status": "incremented",
+    # 구조화
+    processed = {
+        "total_lines": len(lines),
+        "content": lines,
+        "first_line": lines[0] if lines else "",
+        "last_line": lines[-1] if lines else "",
     }
 
-def standard_node(state: State) -> Dict[str, Any]:
-    '''
-    표준 노드 패턴
-
-    입력: 전체 상태
-    출력: 업데이트할 필드만 포함한 딕셔너리
-    '''
-    # 1. 상태에서 필요한 데이터 추출
-    input_data = state.get("input_field", "default_value")
-
-    # 2. 처리 로직 수행
-    processed_data = processed_data(input_data)
-
-    # 3. 업데이트할 필드만 반환
-    # 반환하지 않은 필드는 그대로 유지됨
-    return {
-        "output_field": processed_data,
-        "processed": True,
+    # 메타데이터 생성
+    metadata = {
+        "processed_at": datetime.now().isoformat(),
+        "processor_version": "1.0.0",
+        "data_size": len(raw_data),
     }
 
-def process_data(data):
-    '''데이터 처리 로직'''
-    return f"Processed: {data}"
-
-# 그래프 생성 및 노드 추가
-graph = StateGraph(state)
-graph.add_node("increment", increment) # 노드 이름과 함수 매핑
+    return {
+        "process_data": processed,
+        "metadata": metadata,
+    }
