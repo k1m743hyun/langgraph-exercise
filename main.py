@@ -3,6 +3,8 @@ from typing import TypedDict, Dict, Any, Annotated, Optional
 from datetime import datetime
 from operator import add
 from langchain_core.runnables import RunnableConfig
+from functools import wraps
+import time
 import asyncio
 
 class State(TypedDict):
@@ -12,61 +14,56 @@ class State(TypedDict):
     total_processed: int
     from_cache: bool
 
-class DataProcessorNode:
+def timing_decorator(func):
+    '''노드 실행 시간 측정 데코레이터'''
+    @wraps(func)
+    def wrapper(state):
+        start_time = time.time()
+        result = func(state)
+        execution_time = time.time() - start_time
+
+        # 실행 시간 추가
+        if isinstance(result, dict):
+            result["execution_time"] = execution_time
+
+        print(f"{func.__name__} executed in {execution_time:.3f} seconds")
+        return result
+    
+    return wrapper
+
+def error_handling_decorator(func):
+    '''에러 처리 데코레이터'''
+    @wraps(func)
+    def wrapper(state):
+        try:
+            return func(state)
+        except Exception as e:
+            print(f"Error in {func.__name__}: {e}")
+            return {
+                "error": str(e),
+                "error_node": func.__name__,
+                "status": "failed",
+            }
+    
+    return wrapper
+
+@timing_decorator
+@error_handling_decorator
+def decorated_node(state: State) -> Dict[str, Any]:
     '''
-    클래스 기반 노드
-    상태를 가지고 복잡한 로직을 구현할 때 유용
+    데코레이터가 적용된 노드
+    자동으로 시간 측정과 에러 처리가 됨
     '''
+    # 의도적으로 느린 작업
+    time.sleep(0.1)
 
-    def __init__(self, processor_type: str = "standard"):
-        self.processor_type = processor_type
-        self.processing_count = 0
-        self.cache = {}
-    
-    def __call__(self, state: State) -> Dict[str, Any]:
-        '''
-        노드 실행 메서드
-        클래스 인스턴스를 호출 가능하게 만듦
-        '''
-        input_data = state["input"]
+    # 비즈니스 로직
+    result = state["input"].upper() if isinstance(state["input"], str) else str(state["input"])
 
-        # 캐시 확인
-        cache_key = f"{self.processor_type}:{input_data}"
-        if cache_key in self.cache:
-            print(f"Cache hit for {cache_key}")
-            return {"output": self.cache[cache_key], "from_cache": True}
-        
-        # 처리 수행
-        if self.processor_type == "standard":
-            result = self._standard_process(input_data)
-        elif self.processor_type == "advanced":
-            result = self._advanced_process(input_data)
-        else:
-            result = self._default_process(input_data)
-        
-        # 통계 업데이트
-        self.processing_count += 1
-
-        return {
-            "output": result,
-            "processor_type": self.processor_type,
-            "total_processed": self.processing_count,
-            "from_cache": False,
-        }
-    
-    def _standard_process(self, data):
-        return f"Standard processed: {data}"
-    
-    def _advanced_process(self, data):
-        return f"Advanced processed: {data}"
-
-    def _default_process(self, data):
-        return f"Default processed: {data}"
-
-processor = DataProcessorNode(processor_type="advanced")
+    return {"output":  result}
 
 graph = StateGraph(State)
-graph.add_node("node", processor)
+graph.add_node("node", decorated_node)
 
 graph.add_edge(START, "node")
 graph.add_edge("node", END)
@@ -80,6 +77,3 @@ initial_state = {
 result = compiled_graph.invoke(initial_state)
 print("\n=== 최종 결과 ===")
 print(f"결과: {result["output"]}")
-print(f"타입: {result["processor_type"]}")
-print(f"횟수: {result["total_processed"]}")
-print(f"캐시: {result["from_cache"]}")
