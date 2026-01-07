@@ -1,42 +1,31 @@
 from langgraph.graph import StateGraph
-from typing import TypedDict, Dict, Any
+from typing import TypedDict, Dict, Any, Annotated
 from datetime import datetime
+from operator import add
 
-class CalculationState(TypedDict):
-    numbers: list[float]
-    operation: str
-    result: float
-    history: list[dict]
+class UpdateState(TypedDict):
+    counter: int
+    items: Annotated[list, add] # 리듀서 적용
+    flag: dict
 
-def calculator_node(state: CalculationState) -> Dict[str, Any]:
+def update_node(state: UpdateState) -> Dict[str, Any]:
     '''
-    비즈니스 로직 실행 노드
-    수학 연산을 수행하고 결과를 저장
+    상태 업데이트 노드
+    다양한 업데이트 패턴 시연
     '''
-    numbers = state["numbers"]
-    operation = state["operation"]
+    # 1. 단순 덮어쓰기
+    new_counter = state["counter"] + 1
 
-    # 연산 수행
-    if operation == "sum":
-        result = sum(numbers)
-    elif operation == "multiply":
-        result = 1
-        for num in numbers:
-            result *= num
-    elif operation == "average":
-        result = sum(numbers) / len(numbers) if numbers else 0
-    else:
-        raise ValueError(f"Unknown operation: {operation}")
+    # 2. 리스트에 추가 (리듀서 활용)
+    new_items = ["new_item"]
 
-    # 히스토리 업데이트
-    history_entry = {
-        "operation": operation,
-        "inputs": numbers,
-        "result": result,
-        "timestamp": datetime.now().isoformat(),
-    }
+    # 3. 딕셔너리 부분 업데이트
+    updated_flags = state["flags"].copy()
+    updated_flags["processed"] = True
+    updated_flags["node_name"] = "update_node"
 
     return {
-        "result": result,
-        "history": [history_entry], # 리듀서가 있다면 누적됨
+        "counter": new_counter, # 덮어쓰기
+        "items": new_items,     # 리듀서로 추가
+        "flags": updated_flags, # 전체 교체
     }
