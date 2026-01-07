@@ -2,37 +2,41 @@ from langgraph.graph import StateGraph
 from typing import TypedDict, Dict, Any
 from datetime import datetime
 
-class DataState(TypedDict):
-    raw_data: str
-    process_data: dict
-    metadata: dict
+class CalculationState(TypedDict):
+    numbers: list[float]
+    operation: str
+    result: float
+    history: list[dict]
 
-def data_processor_node(state: DataState) -> Dict[str, Any]:
+def calculator_node(state: CalculationState) -> Dict[str, Any]:
     '''
-    상태 처리 노드
-    원시 데이터를 받아 구조화된 데이터로 변환
+    비즈니스 로직 실행 노드
+    수학 연산을 수행하고 결과를 저장
     '''
-    raw_data = state["raw_data"]
+    numbers = state["numbers"]
+    operation = state["operation"]
 
-    # 데이터 파싱
-    lines = raw_data.strip().split('\n')
+    # 연산 수행
+    if operation == "sum":
+        result = sum(numbers)
+    elif operation == "multiply":
+        result = 1
+        for num in numbers:
+            result *= num
+    elif operation == "average":
+        result = sum(numbers) / len(numbers) if numbers else 0
+    else:
+        raise ValueError(f"Unknown operation: {operation}")
 
-    # 구조화
-    processed = {
-        "total_lines": len(lines),
-        "content": lines,
-        "first_line": lines[0] if lines else "",
-        "last_line": lines[-1] if lines else "",
-    }
-
-    # 메타데이터 생성
-    metadata = {
-        "processed_at": datetime.now().isoformat(),
-        "processor_version": "1.0.0",
-        "data_size": len(raw_data),
+    # 히스토리 업데이트
+    history_entry = {
+        "operation": operation,
+        "inputs": numbers,
+        "result": result,
+        "timestamp": datetime.now().isoformat(),
     }
 
     return {
-        "process_data": processed,
-        "metadata": metadata,
+        "result": result,
+        "history": [history_entry], # 리듀서가 있다면 누적됨
     }
