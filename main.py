@@ -1,88 +1,72 @@
 from langgraph.graph import StateGraph, START, END
-from typing import TypedDict, Literal
+from typing import TypedDict, Annotated
+from operator import add
 
-class ControlFlowState(TypedDict):
-    value: int
-    path_taken: str
-    result: str
+class StateTransferExample(TypedDict):
+    '''상태 전달 예시'''
+    accumulator: Annotated[list, add]
+    current_value: int
+    transformations: list
 
 # 노드 정의
-def evaluate(state: ControlFlowState) -> dict:
+def transform_add_10(state: StateTransferExample) -> dict:
     """
-    값을 평가하는 노드
+    값에 10을 더하고 변환 기록 노드
     """
-    value = state["value"]
-
-    if value > 100:
-        path = "high"
-    elif value > 50:
-        path = "medium"
-    else:
-        path = "low"
-
+    new_value = state["current_value"] + 10
     return {
-        "path_taken": path,
-        "result": f"Value {value} is {path}",
+        "current_value": new_value,
+        "accumulator": [new_value],
+        "transformations": state.get("transformations", []) + ["add_10"],
     }
 
-def handle_high(state: ControlFlowState) -> dict:
+def transform_multiply_2(state: StateTransferExample) -> dict:
     '''
-    높은 값 처리 노드
+    값을 2배로 만들고 변환 기록 노드
     '''
+    new_value = state["current_value"] * 2
     return {
-        "result": f"HIGH: Special handling for {state['value']}",
+        "current_value": new_value,
+        "accumulator": [new_value],
+        "transformations": state.get("transformations", []) + ["multiply_2"],
     }
 
-def handle_medium(state: ControlFlowState) -> dict:
+def transform_square(state: StateTransferExample) -> dict:
     '''
-    중간 값 처리 노드
+    값을 제곱하고 변환 기록 노드
     '''
+    new_value = state["current_value"] ** 2
     return {
-        "result": f"MEDIUM: Standard handling for {state['value']}",
+        "current_value": new_value,
+        "accumulator": [new_value],
+        "transformations": state.get("transformations", []) + ["square"],
     }
 
-def handle_low(state: ControlFlowState) -> dict:
-    '''낮은 값 처리 노드'''
-    return {
-        "result": f"LOW: Basic handling for {state['value']}"
-    }
-
-def route_by_value(state: ControlFlowState) -> Literal["high", "medium", "low"]:
-    '''상태에 따라 경로 결정'''
-    return state["path_taken"]
 
 # 그래프 생성
-graph = StateGraph(ControlFlowState)
+graph = StateGraph(StateTransferExample)
 
 # 노드 추가
-graph.add_node("evaluate", evaluate)
-graph.add_node("handle_high", handle_high)
-graph.add_node("handle_medium", handle_medium)
-graph.add_node("handle_low", handle_low)
+graph.add_node("add_10", transform_add_10)
+graph.add_node("multiply_2", transform_multiply_2)
+graph.add_node("square", transform_square)
 
 # 엣지 추가 - 기본 패턴
-graph.add_edge(START, "evaluate")
-graph.add_conditional_edges(
-    "evaluate",
-    route_by_value,
-    {
-        "high": "handle_high",
-        "medium": "handle_medium",
-        "low": "handle_low"
-    }
-)
-graph.add_edge("handle_high", END)
-graph.add_edge("handle_medium", END)
-graph.add_edge("handle_low", END)
+graph.add_edge(START, "add_10")
+graph.add_edge("add_10", "multiply_2")
+graph.add_edge("multiply_2", "square")
+graph.add_edge("square", END)
 
 compiled_graph = graph.compile()
 
 initial_state = {
-    "value": 10,
+    "accumulator": [],
+    "current_value": 5,
+    "transformations": [],
 }
 
 result = compiled_graph.invoke(initial_state)
 print("\n=== 최종 결과 ===")
-print(f"최종 데이터: {result["value"]}")
-print(f"완료된 단계: {result["path_taken"]}")
-print(f"상태: {result["result"]}")
+print(f"변환 과정: {result["accumulator"]}")
+print(f"완료된 단계: {result["current_value"]}")
+print(f"적용된 변환: {result["transformations"]}")
