@@ -1,72 +1,88 @@
 from langgraph.graph import StateGraph, START, END
-from typing import TypedDict, Dict, Any, Annotated, Optional
-from datetime import datetime
-from operator import add
-from langchain_core.runnables import RunnableConfig
-from functools import wraps
-import time
-import asyncio
+from typing import TypedDict, Literal
 
-class WorkflowState(TypedDict):
-    data: str
-    steps_completed: list
-    status: str
+class ControlFlowState(TypedDict):
+    value: int
+    path_taken: str
+    result: str
 
 # 노드 정의
-def step1(state: WorkflowState) -> dict:
+def evaluate(state: ControlFlowState) -> dict:
     """
-    첫 번째 처리 노드
+    값을 평가하는 노드
     """
+    value = state["value"]
+
+    if value > 100:
+        path = "high"
+    elif value > 50:
+        path = "medium"
+    else:
+        path = "low"
+
     return {
-        "data": state["data"] + " -> Step 1",
-        "steps_completed": state.get("steps_completed", []) + ["step1"],
-        "status": "step1_complete",
+        "path_taken": path,
+        "result": f"Value {value} is {path}",
     }
 
-def step2(state: WorkflowState) -> dict:
+def handle_high(state: ControlFlowState) -> dict:
     '''
-    두 번째 처리 노드
+    높은 값 처리 노드
     '''
     return {
-        "data": state["data"] + " -> Step 2",
-        "steps_completed": state.get("steps_completed", []) + ["step2"],
-        "status": "step2_complete",
+        "result": f"HIGH: Special handling for {state['value']}",
     }
 
-def step3(state: WorkflowState) -> dict:
+def handle_medium(state: ControlFlowState) -> dict:
     '''
-    세 번째 처리 노드
+    중간 값 처리 노드
     '''
     return {
-        "data": state["data"] + " -> Step 3",
-        "steps_completed": state.get("steps_completed", []) + ["step3"],
-        "status": "step3_complete",
+        "result": f"MEDIUM: Standard handling for {state['value']}",
     }
+
+def handle_low(state: ControlFlowState) -> dict:
+    '''낮은 값 처리 노드'''
+    return {
+        "result": f"LOW: Basic handling for {state['value']}"
+    }
+
+def route_by_value(state: ControlFlowState) -> Literal["high", "medium", "low"]:
+    '''상태에 따라 경로 결정'''
+    return state["path_taken"]
 
 # 그래프 생성
-graph = StateGraph(WorkflowState)
+graph = StateGraph(ControlFlowState)
 
 # 노드 추가
-graph.add_node("step1", step1)
-graph.add_node("step2", step2)
-graph.add_node("step3", step3)
+graph.add_node("evaluate", evaluate)
+graph.add_node("handle_high", handle_high)
+graph.add_node("handle_medium", handle_medium)
+graph.add_node("handle_low", handle_low)
 
 # 엣지 추가 - 기본 패턴
-graph.add_edge(START, "step1")     # 시작 -> step1
-graph.add_edge("step1", "step2")   # step1 -> step2
-graph.add_edge("step2", "step3")   # step2 -> step3
-graph.add_edge("step3", END)       # step3 -> 종료
+graph.add_edge(START, "evaluate")
+graph.add_conditional_edges(
+    "evaluate",
+    route_by_value,
+    {
+        "high": "handle_high",
+        "medium": "handle_medium",
+        "low": "handle_low"
+    }
+)
+graph.add_edge("handle_high", END)
+graph.add_edge("handle_medium", END)
+graph.add_edge("handle_low", END)
 
 compiled_graph = graph.compile()
 
 initial_state = {
-    "data": "Start",
-    "steps_completed": [],
-    "status": "initialized",
+    "value": 10,
 }
 
 result = compiled_graph.invoke(initial_state)
 print("\n=== 최종 결과 ===")
-print(f"최종 데이터: {result["data"]}")
-print(f"완료된 단계: {result["steps_completed"]}")
-print(f"상태: {result["status"]}")
+print(f"최종 데이터: {result["value"]}")
+print(f"완료된 단계: {result["path_taken"]}")
+print(f"상태: {result["result"]}")
