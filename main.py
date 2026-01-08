@@ -1,72 +1,92 @@
 from langgraph.graph import StateGraph, START, END
-from typing import TypedDict, Annotated
+from typing import TypedDict, Literal
 from operator import add
 
-class StateTransferExample(TypedDict):
-    '''상태 전달 예시'''
-    accumulator: Annotated[list, add]
-    current_value: int
-    transformations: list
+class ConditionalState(TypedDict):
+    user_input: str
+    sentiment: str
+    response: str
 
 # 노드 정의
-def transform_add_10(state: StateTransferExample) -> dict:
+def analyze_sentiment(state: ConditionalState) -> dict:
     """
-    값에 10을 더하고 변환 기록 노드
+    감정 분석 노드
     """
-    new_value = state["current_value"] + 10
+    text = state["user_input"].lower()
+
+    # 간단한 감정 분석 (실제로는 ML 모델 사용)
+    if any(word in text for word in ["happy", "great", "awesome", "love"]):
+        sentiment = "positive"
+    elif any(word in text for word in ["sad", "bad", "hate", "terrible"]):
+        sentiment = "negative"
+    else:
+        sentiment = "neutral"
+
     return {
-        "current_value": new_value,
-        "accumulator": [new_value],
-        "transformations": state.get("transformations", []) + ["add_10"],
+        "sentiment": sentiment,
     }
 
-def transform_multiply_2(state: StateTransferExample) -> dict:
+def positive_response(state: ConditionalState) -> dict:
     '''
-    값을 2배로 만들고 변환 기록 노드
+    긍정적인 응답 생성 노드
     '''
-    new_value = state["current_value"] * 2
     return {
-        "current_value": new_value,
-        "accumulator": [new_value],
-        "transformations": state.get("transformations", []) + ["multiply_2"],
+        "response": f"😊 That's wonderful! I'm glad you feel that way about: {state['user_input']}",
     }
 
-def transform_square(state: StateTransferExample) -> dict:
+def negative_response(state: ConditionalState) -> dict:
     '''
-    값을 제곱하고 변환 기록 노드
+    부정적인 응답 생성 노드
     '''
-    new_value = state["current_value"] ** 2
     return {
-        "current_value": new_value,
-        "accumulator": [new_value],
-        "transformations": state.get("transformations", []) + ["square"],
+        "response": f"😔 I understand that's difficult. Let me help with: {state['user_input']}",
     }
 
+def neutral_response(state: ConditionalState) -> dict:
+    '''
+    중립적인 응답 생성 노드
+    '''
+    return {
+        "response": f"📝 I see. Let me process your request: {state['user_input']}",
+    }
+
+# 라우팅 함수
+def sentiment_router(state: ConditionalState) -> Literal["positive", "negative", "neutral"]:
+    '''감정에 따라 라우팅'''
+    return state['sentiment']
 
 # 그래프 생성
-graph = StateGraph(StateTransferExample)
+graph = StateGraph(ConditionalState)
 
 # 노드 추가
-graph.add_node("add_10", transform_add_10)
-graph.add_node("multiply_2", transform_multiply_2)
-graph.add_node("square", transform_square)
+graph.add_node("analyze", analyze_sentiment)
+graph.add_node("positive", positive_response)
+graph.add_node("negative", negative_response)
+graph.add_node("neutral", neutral_response)
+graph.add_node("router", sentiment_router)
 
 # 엣지 추가 - 기본 패턴
-graph.add_edge(START, "add_10")
-graph.add_edge("add_10", "multiply_2")
-graph.add_edge("multiply_2", "square")
-graph.add_edge("square", END)
+graph.add_edge(START, "analyze")
+graph.add_conditional_edges(
+    "analyze",
+    sentiment_router,
+    {
+        "positive": "positive",
+        "negative": "negative",
+        "neutral": "neutral",
+    }
+)
+graph.add_edge("positive", END)
+graph.add_edge("negative", END)
+graph.add_edge("neutral", END)
 
 compiled_graph = graph.compile()
 
 initial_state = {
-    "accumulator": [],
-    "current_value": 5,
-    "transformations": [],
+    "user_input": "happy",
 }
 
 result = compiled_graph.invoke(initial_state)
 print("\n=== 최종 결과 ===")
-print(f"변환 과정: {result["accumulator"]}")
-print(f"완료된 단계: {result["current_value"]}")
-print(f"적용된 변환: {result["transformations"]}")
+print(f"감정: {result["sentiment"]}")
+print(f"결과: {result["response"]}")
