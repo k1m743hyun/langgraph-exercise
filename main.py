@@ -1,121 +1,112 @@
 from langgraph.graph import StateGraph, START, END
-from typing import TypedDict, Union, List
+from langgraph.types import Command
+from typing import TypedDict, Literal
 
-class ComplexRoutingState(TypedDict):
-    priority: int
-    data_size: int
-    processing_mode: str
-    routes_taken: list
+class OrderState(TypedDict):
+    customer_name: str
+    item: str
+    quantity: int
+    price: float
+    status: str
+    messages: list
 
 # 노드 정의
-def initial_assessment(state: ComplexRoutingState) -> dict:
+def check_inventory(state: OrderState) -> Command[Literal["process_payment", "out_of_stock", END]]:
     """
-    초기 평가 및 라우팅 준비 노드
+    재고 확인 후 다음 단계 결정 노드
     """
-    # 복합 조건 평가
-    if state["priority"] >= 8 and state["data_size"] < 1000:
-        mode = "express"
-    elif state["priority"] >= 5 and state["data_size"] < 10000:
-        mode = "standard"
-    elif state["data_size"] > 100000:
-        mode = "batch"
+    item = state['item']
+    quantity = state['quantity']
+
+    # 간단한 재고 확인 (실제로는 DB 조회)
+    available_stock = {"사과": 10, "바나나": 5, "오렌지": 0}
+    stock = available_stock.get(item, 0)
+
+    if stock >= quantity:
+        # 재고 충분 - 결제 처리로 이동
+        return Command(
+            goto="process_payment",
+            update={
+                "status": "재고 확인 완료",
+                "messages": state['messages'] + [f"{item} {quantity}개 재고 확인됨"]
+            }
+        )
     else:
-        mode = "economy"
+        # 재고 부족 - 품절 처리로 이동
+        return Command(
+            goto="out_of_stock",
+            update={
+                "status": "재고 부족",
+                "messages": state['messages'] + [f"{item} 재고 부족 (요청: {quantity}개, 보유: {stock}개)"]
+            }
+        )
 
-    return {
-        "processing_mode": mode,
-        "routes_taken": ["assessment"],
-    }
+def process_payment(state: OrderState) -> Command[Literal["send_confirmation", END]]:
+    '''
+    결제 처리 노드
+    '''
+    total_price = state["quantity"] * state["price"]
 
-def express_processing(state: ComplexRoutingState) -> dict:
-    '''
-    고속 처리 노드
-    '''
-    return {
-        "routes_taken": state["routes_taken"] + ["express"],
-        "processing_mode": "express_complete",
-    }
+    return Command(
+        goto="send_confirmation",
+        update={
+            "status": "결제 완료",
+            "messages": state["messages"] + [f"결제 완료: {total_price}원"]
+        }
+    )
 
-def standard_processing(state: ComplexRoutingState) -> dict:
+def out_of_stock(state: OrderState) -> Command[Literal[END]]:
     '''
-    표준 처리 노드
+    품절 처리 노드
     '''
-    return {
-        "routes_taken": state["routes_taken"] + ["standard"],
-        "processing_mode": "standard_complete",
-    }
+    return Command(
+        goto=END,
+        update={
+            "status": "주문 취소됨",
+            "messages": state["messages"] + ["죄송합니다. 품절로 인해 주문이 취소되었습니다."]
+        }
+    )
 
-def batch_processing(state: ComplexRoutingState) -> dict:
+def send_confirmation(state: OrderState) -> Command[Literal[END]]:
     '''
-    배치 처리 노드
+    주문 확인 메세지 발송 노드
     '''
-    return {
-        "routes_taken": state["routes_taken"] + ["batch"],
-        "processing_mode": "batch_complete",
-    }
+    customer = state["customer_name"]
 
-def economy_processing(state: ComplexRoutingState) -> dict:
-    '''
-    경제 처리 노드
-    '''
-    return {
-        "routes_taken": state["routes_taken"] + ["economy"],
-        "processing_mode": "economy_complete",
-    }
-
-# 복잡한 라우팅 로직
-def complex_router(state: ComplexRoutingState) -> Union[str, List[str]]:
-    '''
-    복잡한 라우팅 로직
-    단일 노드 또는 여러 노드로 라우팅 가능
-    '''
-    mode = state["processing_mode"]
-
-    # 단일 라우팅
-    if mode in ["express", "standard", "batch", "economy"]:
-        return mode
-    
-    # 다중 라우팅 (병렬 실행)
-    if state["priority"] == 10:
-        return ["express", "standard"] # 두 경로 모두 실행
-
-    # 기본값
-    return state['sentiment']
+    return Command(
+        goto=END,
+        update={
+            "status": "주문 완료",
+            "messages": state["messages"] + [f"{customer}님께 주문 확인 메세지를 발송했습니다."]
+        }
+    )
 
 # 그래프 생성
-graph = StateGraph(ComplexRoutingState)
+graph = StateGraph(OrderState)
 
 # 노드 추가
-graph.add_node("assessment", initial_assessment)
-graph.add_node("express", express_processing)
-graph.add_node("standard", standard_processing)
-graph.add_node("batch", batch_processing)
-graph.add_node("economy", economy_processing)
-graph.add_node("router", complex_router)
+graph.add_node("check_inventory", check_inventory)
+graph.add_node("process_payment", process_payment)
+graph.add_node("out_of_stock", out_of_stock)
+graph.add_node("send_confirmation", send_confirmation)
 
 # 엣지 추가 - 기본 패턴
-graph.add_edge(START, "assessment")
-graph.add_conditional_edges(
-    "assessment",
-    complex_router,
-    {
-        "express": "express",
-        "standard": "standard",
-        "batch": "batch",
-        "economy": "economy",
-    }
-)
-for node in ["express", "standard", "batch", "economy"]:
-    graph.add_edge(node, END)
+graph.add_edge(START, "check_inventory")
 
 compiled_graph = graph.compile()
 
 initial_state = {
-    "priority": 10,
-    "data_size": 20,
+    "customer_name": "김태현",
+    "item": "사과",
+    "quantity": 20,
+    "price": 10000,
+    "status": "",
+    "messages": [],
 }
 
 result = compiled_graph.invoke(initial_state)
 print("\n=== 최종 결과 ===")
-print(f"처리 방법: {result["processing_mode"]}")
-print(f"처리 과정: {result["routes_taken"]}")
+print(f"고객 명: {result["customer_name"]}")
+print(f"최종 상태: {result["status"]}")
+for message in result['messages']:
+    print(f"    - {message}")
