@@ -1,92 +1,121 @@
 from langgraph.graph import StateGraph, START, END
-from typing import TypedDict, Literal
-from operator import add
+from typing import TypedDict, Union, List
 
-class ConditionalState(TypedDict):
-    user_input: str
-    sentiment: str
-    response: str
+class ComplexRoutingState(TypedDict):
+    priority: int
+    data_size: int
+    processing_mode: str
+    routes_taken: list
 
 # 노드 정의
-def analyze_sentiment(state: ConditionalState) -> dict:
+def initial_assessment(state: ComplexRoutingState) -> dict:
     """
-    감정 분석 노드
+    초기 평가 및 라우팅 준비 노드
     """
-    text = state["user_input"].lower()
-
-    # 간단한 감정 분석 (실제로는 ML 모델 사용)
-    if any(word in text for word in ["happy", "great", "awesome", "love"]):
-        sentiment = "positive"
-    elif any(word in text for word in ["sad", "bad", "hate", "terrible"]):
-        sentiment = "negative"
+    # 복합 조건 평가
+    if state["priority"] >= 8 and state["data_size"] < 1000:
+        mode = "express"
+    elif state["priority"] >= 5 and state["data_size"] < 10000:
+        mode = "standard"
+    elif state["data_size"] > 100000:
+        mode = "batch"
     else:
-        sentiment = "neutral"
+        mode = "economy"
 
     return {
-        "sentiment": sentiment,
+        "processing_mode": mode,
+        "routes_taken": ["assessment"],
     }
 
-def positive_response(state: ConditionalState) -> dict:
+def express_processing(state: ComplexRoutingState) -> dict:
     '''
-    긍정적인 응답 생성 노드
+    고속 처리 노드
     '''
     return {
-        "response": f"😊 That's wonderful! I'm glad you feel that way about: {state['user_input']}",
+        "routes_taken": state["routes_taken"] + ["express"],
+        "processing_mode": "express_complete",
     }
 
-def negative_response(state: ConditionalState) -> dict:
+def standard_processing(state: ComplexRoutingState) -> dict:
     '''
-    부정적인 응답 생성 노드
+    표준 처리 노드
     '''
     return {
-        "response": f"😔 I understand that's difficult. Let me help with: {state['user_input']}",
+        "routes_taken": state["routes_taken"] + ["standard"],
+        "processing_mode": "standard_complete",
     }
 
-def neutral_response(state: ConditionalState) -> dict:
+def batch_processing(state: ComplexRoutingState) -> dict:
     '''
-    중립적인 응답 생성 노드
+    배치 처리 노드
     '''
     return {
-        "response": f"📝 I see. Let me process your request: {state['user_input']}",
+        "routes_taken": state["routes_taken"] + ["batch"],
+        "processing_mode": "batch_complete",
     }
 
-# 라우팅 함수
-def sentiment_router(state: ConditionalState) -> Literal["positive", "negative", "neutral"]:
-    '''감정에 따라 라우팅'''
+def economy_processing(state: ComplexRoutingState) -> dict:
+    '''
+    경제 처리 노드
+    '''
+    return {
+        "routes_taken": state["routes_taken"] + ["economy"],
+        "processing_mode": "economy_complete",
+    }
+
+# 복잡한 라우팅 로직
+def complex_router(state: ComplexRoutingState) -> Union[str, List[str]]:
+    '''
+    복잡한 라우팅 로직
+    단일 노드 또는 여러 노드로 라우팅 가능
+    '''
+    mode = state["processing_mode"]
+
+    # 단일 라우팅
+    if mode in ["express", "standard", "batch", "economy"]:
+        return mode
+    
+    # 다중 라우팅 (병렬 실행)
+    if state["priority"] == 10:
+        return ["express", "standard"] # 두 경로 모두 실행
+
+    # 기본값
     return state['sentiment']
 
 # 그래프 생성
-graph = StateGraph(ConditionalState)
+graph = StateGraph(ComplexRoutingState)
 
 # 노드 추가
-graph.add_node("analyze", analyze_sentiment)
-graph.add_node("positive", positive_response)
-graph.add_node("negative", negative_response)
-graph.add_node("neutral", neutral_response)
-graph.add_node("router", sentiment_router)
+graph.add_node("assessment", initial_assessment)
+graph.add_node("express", express_processing)
+graph.add_node("standard", standard_processing)
+graph.add_node("batch", batch_processing)
+graph.add_node("economy", economy_processing)
+graph.add_node("router", complex_router)
 
 # 엣지 추가 - 기본 패턴
-graph.add_edge(START, "analyze")
+graph.add_edge(START, "assessment")
 graph.add_conditional_edges(
-    "analyze",
-    sentiment_router,
+    "assessment",
+    complex_router,
     {
-        "positive": "positive",
-        "negative": "negative",
-        "neutral": "neutral",
+        "express": "express",
+        "standard": "standard",
+        "batch": "batch",
+        "economy": "economy",
     }
 )
-graph.add_edge("positive", END)
-graph.add_edge("negative", END)
-graph.add_edge("neutral", END)
+for node in ["express", "standard", "batch", "economy"]:
+    graph.add_edge(node, END)
 
 compiled_graph = graph.compile()
 
 initial_state = {
-    "user_input": "happy",
+    "priority": 10,
+    "data_size": 20,
 }
 
 result = compiled_graph.invoke(initial_state)
 print("\n=== 최종 결과 ===")
-print(f"감정: {result["sentiment"]}")
-print(f"결과: {result["response"]}")
+print(f"처리 방법: {result["processing_mode"]}")
+print(f"처리 과정: {result["routes_taken"]}")
