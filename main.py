@@ -1,49 +1,37 @@
 from langgraph.graph import StateGraph, START, END
 from typing import TypedDict
 
-# State: 숫자 하나만 저장
-class ConditionalState(TypedDict):
-    count:int
+# State: 더 많은 정보 저장
+class TeamworkState(TypedDict):
+    number:int
+    doubled: int
     message: str
 
-# Node 1: 카운트 증가
-def increment(state):
-    new_count = state['count'] + 1
-    print(f"카운트 증가: {state['count']} -> {new_count}")
-    return {"count": new_count}
+# Node 1: 숫자를 2배로 만들기
+def doubler(state):
+    double_value = state['number'] * 2
+    print(f"2배 계산: {state['number']} X 2 = {double_value}")
+    return {"doubled": double_value}
 
-# Node 2: 완료 메세지
-def finish(state):
-    print("카운팅 완료!")
-    return {"message": "완료되었습니다!"}
+# Node 2: 메세지 만들기
+def messenger(state):
+    message = f"원래 숫자 {state['number']}가 {state['doubled']}가 되었습니다!"
+    print(f"메세지 생성: {message}")
+    return {"message": message}
 
-# 조건 함수: 다음에 어디로 갈지 결정
-def should_continue(state):
-    if state['count'] < 3:
-        return "continue"
-    else:
-        return "finish"
-
-# Graph: 시작 -> 카운트 -> 끝
-graph = StateGraph(ConditionalState)
+# Graph 구성
+graph = StateGraph(TeamworkState)
 
 # 노드 추가
-graph.add_node("increment", increment)
-graph.add_node("finish", finish)
+graph.add_node("doubler", doubler)
+graph.add_node("messenger", messenger)
 
 # 엣지 연결
-graph.add_edge(START, "increment")
-graph.add_conditional_edges(
-    "increment",
-    should_continue,
-    {
-        "continue": "increment",
-        "finish": "finish"
-    }
-)
-graph.add_edge("finish", END)
+graph.add_edge(START, "doubler")
+graph.add_edge("doubler", "messenger")
+graph.add_edge("messenger", END)
 
 # 실행
 app = graph.compile()
-result = app.invoke({"count": 0, "message": ""})
+result = app.invoke({"number": 5, "doubled": 0, "message": ""})
 print(f"최종 결과: {result}")
