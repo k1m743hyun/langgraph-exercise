@@ -1,37 +1,43 @@
 from langgraph.graph import StateGraph, START, END
-from typing import TypedDict
+from typing_extensions import TypedDict
 
-# State: 더 많은 정보 저장
-class TeamworkState(TypedDict):
-    number:int
-    doubled: int
-    message: str
+# 서브 그래프 정의
+class SubgraphState(TypedDict):
+    foo: str    # 부모 그래프와 공유하는 키
+    bar: str    # 서브그래프에서만 사용하는 프라이빗 키
 
-# Node 1: 숫자를 2배로 만들기
-def doubler(state):
-    double_value = state['number'] * 2
-    print(f"2배 계산: {state['number']} X 2 = {double_value}")
-    return {"doubled": double_value}
+def subgraph_node_1(state: SubgraphState):
+    return {"bar": "bar"}
 
-# Node 2: 메세지 만들기
-def messenger(state):
-    message = f"원래 숫자 {state['number']}가 {state['doubled']}가 되었습니다!"
-    print(f"메세지 생성: {message}")
-    return {"message": message}
+def subgraph_node_2(state: SubgraphState):
+    # 프라이빗 키(bar)를 사용하여 공유 키(foo)를 업데이트
+    return {"foo": state["foo"] + state["bar"]}
 
-# Graph 구성
-graph = StateGraph(TeamworkState)
+subgraph_builder = StateGraph(SubgraphState)
+subgraph_builder.add_node(subgraph_node_1)
+subgraph_builder.add_node(subgraph_node_2)
+subgraph_builder.add_edge(START, "subgraph_node_1")
+subgraph_builder.add_edge("subgraph_node_1", "subgraph_node_2")
+subgraph = subgraph_builder.compile()
+
+# 부모 그래프 정의
+class ParentState(TypedDict):
+    foo: str
+
+def node_1(state: ParentState):
+    return {"foo": "hi! " + state["foo"]}
+
+builder = StateGraph(ParentState)
 
 # 노드 추가
-graph.add_node("doubler", doubler)
-graph.add_node("messenger", messenger)
+builder.add_node("node_1", node_1)
+builder.add_node("node_2", subgraph)    # 컴파일된 서브 그래프를 직접 추가
 
 # 엣지 연결
-graph.add_edge(START, "doubler")
-graph.add_edge("doubler", "messenger")
-graph.add_edge("messenger", END)
+builder.add_edge(START, "node_1")
+builder.add_edge("node_1", "node_2")
 
 # 실행
-app = graph.compile()
-result = app.invoke({"number": 5, "doubled": 0, "message": ""})
-print(f"최종 결과: {result}")
+graph = builder.compile()
+for chunk in graph.stream({"foo": "foo"}):
+    print(chunk)
