@@ -1,43 +1,37 @@
-from langgraph.graph import StateGraph, START, END
-from typing_extensions import TypedDict
+from langchain_core.messages import AnyMessage
+from langgraph.graph import StateGraph, START, END, MessagesState
+from langgraph.graph.message import add_messages
+from typing_extensions import TypedDict, Annotated
 
-# 서브 그래프 정의
-class SubgraphState(TypedDict):
-    foo: str    # 부모 그래프와 공유하는 키
-    bar: str    # 서브그래프에서만 사용하는 프라이빗 키
+# 서브 그래프 상태 - 다른 스키마
+class SubgraphMessageState(TypedDict):
+    subgraph_message: Annotated[list[AnyMessage], add_messages]
 
-def subgraph_node_1(state: SubgraphState):
-    return {"bar": "bar"}
+def call_model(state: SubgraphMessageState):
+    response = model.invoke(state["subgraph_message"])
+    return {"subgraph_message": response}
 
-def subgraph_node_2(state: SubgraphState):
-    # 프라이빗 키(bar)를 사용하여 공유 키(foo)를 업데이트
-    return {"foo": state["foo"] + state["bar"]}
-
-subgraph_builder = StateGraph(SubgraphState)
-subgraph_builder.add_node(subgraph_node_1)
-subgraph_builder.add_node(subgraph_node_2)
-subgraph_builder.add_edge(START, "subgraph_node_1")
-subgraph_builder.add_edge("subgraph_node_1", "subgraph_node_2")
+subgraph_builder = StateGraph(SubgraphMessageState)
+subgraph_builder.add_node("call_model_from_subgraph", call_model)
+subgraph_builder.add_edge(START, "call_model_from_subgraph")
 subgraph = subgraph_builder.compile()
 
-# 부모 그래프 정의
-class ParentState(TypedDict):
-    foo: str
+# 부모 그래프 - 상태 변환 함수 정의
+def call_subgraph(state: MessagesState):
+    # 부모 상태 -> 서브그래프 상태로 변환
+    response = subgraph.invoke({"subgraph_message": state["messages"]})
+    # 서브그래프 상태 -> 부모 상태로 변환하여 변환
+    return {"messages": response["subgraph_messages"]}
 
-def node_1(state: ParentState):
-    return {"foo": "hi! " + state["foo"]}
-
-builder = StateGraph(ParentState)
+builder = StateGraph(MessagesState)
 
 # 노드 추가
-builder.add_node("node_1", node_1)
-builder.add_node("node_2", subgraph)    # 컴파일된 서브 그래프를 직접 추가
+builder.add_node("subgraph_node", call_subgraph)
 
 # 엣지 연결
-builder.add_edge(START, "node_1")
-builder.add_edge("node_1", "node_2")
+builder.add_edge(START, "subgraph_node")
 
 # 실행
 graph = builder.compile()
-for chunk in graph.stream({"foo": "foo"}):
-    print(chunk)
+
+graph.invoke({"messages": [{"role": "user", "content": "hi!"}]})
