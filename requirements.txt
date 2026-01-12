@@ -5,3 +5,4 @@ langchain-google-genai==2.1.9
 langchain-anthropic==0.3.18
 langchain-community==0.3.27
 python-dotenv==1.2.1
+ipython==9.9.0
